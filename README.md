@@ -7,7 +7,8 @@ The user manual is here:
 [http://prof7bit.github.com/goxtool/](http://prof7bit.github.com/goxtool/)
 
 
-#Trailing stop loss bot: strategy_trailing_stoploss.py
+Trailing stop loss bot: strategy_trailing_stoploss.py
+-----------------------------------------------------
 
 This is an implementation of a trailing stop loss trading bot
 for MtGox bitcoin exchange.
@@ -65,7 +66,8 @@ email_server = smtp.example.com
 email_server_port = 25
 email_server_password = TradingBotEmailPassword
 
-#Simple trend following bot: strategy_simple_trend_follower.py
+Simple trend following bot: strategy_simple_trend_follower.py
+-------------------------------------------------------------
 
 This is an implementation of a simple trend following trading bot
 for MtGox bitcoin exchange.
@@ -96,6 +98,23 @@ The following keys are also added:
 "B" - Buy BTC for all the USD you have
 "C" - Cancell all outstanding orders
 "D" - Dump bot state (for offline plotting)
+
+Volume gated trend following bot: 
+---------------------------------
+strategy_volume_trend_follower.py
+
+Usage:
+------
+./goxtool.py --strategy strategy_volume_trend_follower.py
+
+Details:
+--------
+Very similar to trend follower, but the trades are gated by the shift in
+volume. The idea is that significant price shift is always a result of 
+a significant change in trade volumes. So unless an increased trade volume
+is detected, the trend follower is disabled.
+
+Market trend estimation is done by using three moving price averages.
 
 Support:
 --------
