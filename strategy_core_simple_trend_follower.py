@@ -5,7 +5,7 @@ import sqlite3
 import calendar
 import math
 from indicator.ma import ExponentialMovingAverage as ema
-from indicator.ma import SimpleMovingAverage as sma
+from indicator.ma import SimpleMovingAverage as ema
 from exchange_connection import ExchangeConnection, MockExchangeConnection
 
 """
@@ -23,21 +23,21 @@ class SimpleTrendFollowerStrategyCore:
 		self.xcon = xcon
 
 		# Constants
-		self.Price_Fast_EMA_Time		= 7  * 60 		# minutes
-		self.Price_Slow_SMA_Time		= 14 * 60	# minutes
+		self.Price_Fast_EMA_Time		= 7  * 60 	# minutes
+		self.Price_Slow_EMA_Time		= 14 * 60	# minutes
 		self.Price_LongTerm_EMA_Time	= 21 * 60	# minutes
 
 		self.Last_Buy_Price  = 0.0
 		self.Last_Sell_Price = 0.0
 		self.Current_Price = 0.0
 
-		self.MinimumSpread = 0.0008
+		self.MinimumSpread = 0.0012
 
 		# Price indicators
 
 		# Slow moving price average
-		timedelta = datetime.timedelta(minutes = self.Price_Slow_SMA_Time)
-		self.price_sma_slow = sma(timedelta)
+		timedelta = datetime.timedelta(minutes = self.Price_Slow_EMA_Time)
+		self.price_ema_slow = ema(timedelta)
 
 		# Fast five minutes moving averages
 		timedelta = datetime.timedelta(minutes = self.Price_Fast_EMA_Time)
@@ -59,7 +59,7 @@ class SimpleTrendFollowerStrategyCore:
 
 	def UpdatePrice(self, data):
 
-		self.price_sma_slow.Update(data)
+		self.price_ema_slow.Update(data)
 		self.price_ema_fast.Update(data)
 		self.price_ema_longterm.Update(data)
 		self.Current_Price = data["value"]
@@ -67,31 +67,30 @@ class SimpleTrendFollowerStrategyCore:
 
 	def IsDownTrend(self):
 
-		if ( self.price_ema_fast.Value > self.price_sma_slow.Value ):
+		if ( self.price_ema_fast.Value > self.price_ema_slow.Value ):
 			return False
 
 		if ( self.price_ema_fast.Value > self.price_ema_longterm.Value):
 			return False
 
-		if (self.price_sma_slow.Value > self.price_ema_longterm.Value):
+		if (self.price_ema_slow.Value > self.price_ema_longterm.Value):
 			return False
 
 		return True
 
 	def IsUpTrend(self):
-		ma_diff = self.price_ema_fast.Value - self.price_sma_slow.Value
+
 		ma_diff_min = self.price_ema_fast.Value * self.MinimumSpread
 
+		ma_diff = self.price_ema_fast.Value - self.price_ema_slow.Value
  		if ( ma_diff < ma_diff_min ):
  			return False
 
 		ma_diff = self.price_ema_fast.Value - self.price_ema_longterm.Value
-		ma_diff_min = self.price_ema_fast.Value * self.MinimumSpread
  		if ( ma_diff < ma_diff_min ):
  			return False
 
-		ma_diff = self.price_sma_slow.Value - self.price_ema_longterm.Value
-		ma_diff_min = self.price_ema_fast.Value * self.MinimumSpread
+		ma_diff = self.price_ema_slow.Value - self.price_ema_longterm.Value
  		if ( ma_diff < ma_diff_min ):
  			return False
 
@@ -100,11 +99,15 @@ class SimpleTrendFollowerStrategyCore:
 	def Act(self):
 
 		# If we do not have enough data, and are just starting, take no action
-		if (not self.price_sma_slow.IsAccurate()):
+		if (not self.price_ema_slow.IsAccurate()):
 			return
 
 		if (not self.price_ema_longterm.IsAccurate()):
 			return
+
+		# Debug breakpoint for particular datapoints in time
+		if (self._debugIsNowPassedTimeStamp("2013 Oct 2 02:00", "%Y %b %d %H:%M")):
+			set_breakpoint_here = True
 
 		# Currently invested in BTC
 		if (self.xcon.AvailableBTC() * self.Current_Price > self.xcon.AvailableUSD()):
@@ -157,6 +160,16 @@ class SimpleTrendFollowerStrategyCore:
 		self.xcon.BuyBTC(affordable_amount_of_btc)
 		self._postBuyBTCDebugHook()
 
+	def _debugIsNowPassedTimeStamp(self, timestring, timeformat):
+		if (not self.debug):
+			return False
+
+		now = datetime.datetime.fromtimestamp(self._debugData["PriceEmaFast"][-1]["now"])
+		time_of_interest = datetime.datetime.strptime(timestring,timeformat)
+		if (now > time_of_interest):
+			return True
+
+		return False
 
 	def _updatePriceDebugHook(self, data):
 		if (not self.debug):
@@ -165,8 +178,8 @@ class SimpleTrendFollowerStrategyCore:
 		if ("RawPrice" not in self._debugData):
 			self._debugData["RawPrice"] = []
 
-		if ("PriceSmaSlow" not in self._debugData):
-			self._debugData["PriceSmaSlow"] = []
+		if ("PriceEmaSlow" not in self._debugData):
+			self._debugData["PriceEmaSlow"] = []
 
 		if ("PriceEmaFast" not in self._debugData):
 			self._debugData["PriceEmaFast"] = []
@@ -181,8 +194,8 @@ class SimpleTrendFollowerStrategyCore:
 
 		tmp = {}
 		tmp["now"] = data["now"]
-		tmp["value"] = self.price_sma_slow.Value
-		self._debugData["PriceSmaSlow"].append(tmp)
+		tmp["value"] = self.price_ema_slow.Value
+		self._debugData["PriceEmaSlow"].append(tmp)
 		del tmp
 
 		tmp = {}
@@ -308,9 +321,9 @@ def plotStrategyCorePerformance(debugData):
 	splot.Plot("RawPrice",1, "y-")
 	splot.Plot("Sell", 1, "ro")
 	splot.Plot("Buy", 1, "g^")
-	splot.Plot("PriceSmaSlow", 1, "r-")
+	splot.Plot("PriceEmaSlow", 1, "g-")
 	splot.Plot("PriceEmaFast", 1, "b-")
-	splot.Plot("PriceEmaLongTerm", 1, "g-")
+	splot.Plot("PriceEmaLongTerm", 1, "r-")
 
 	splot.Show()
 

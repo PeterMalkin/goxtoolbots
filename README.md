@@ -7,15 +7,16 @@ The user manual is here:
 [http://prof7bit.github.com/goxtool/](http://prof7bit.github.com/goxtool/)
 
 
-Trailing stop loss bot: strategy_trailing_stoploss.py
------------------------------------------------------
+Trailing stop loss bot: 
+-------------------------------
+    strategy_trailing_stoploss.py
 
 This is an implementation of a trailing stop loss trading bot
 for MtGox bitcoin exchange.
 
 Usage:
 ------
-./goxtool.py --strategy strategy_trailing_stoploss.py
+    ./goxtool.py --strategy strategy_trailing_stoploss.py
 
 Features:
 ---------
@@ -32,11 +33,11 @@ This bot tracks MtGox trades and records the maximum price of BTC in the last th
 If the current price drops below 15% of the maximum, the bot sells all BTC assets 
 as Market Order and stops. It also send a notification email to the owner.
 
-The following keys are also added:
-"S" - Sell all BTC 
-"B" - Buy BTC for all the USD you have
-"C" - Cancell all outstanding orders
-"D" - Dump bot state (for offline plotting)
+The following keys are also added:  
+* "S" - Sell all BTC  
+* "B" - Buy BTC for all the USD you have  
+* "C" - Cancell all outstanding orders  
+* "D" - Dump bot state (for offline plotting)  
 
 Backtesting:
 ------------
@@ -60,11 +61,13 @@ Email:
 ------
 Adjust your email credentials in goxtool.ini to enable email notifications.
 You will need the following:
-email_to = mtgoxtrader@example.com
-email_from = tradingbot@example.com
-email_server = smtp.example.com
-email_server_port = 25
-email_server_password = TradingBotEmailPassword
+
+    [email]
+    email_to = mtgoxtrader@example.com
+    email_from = tradingbot@example.com
+    email_server = smtp.example.com
+    email_server_port = 25
+    email_server_password = TradingBotEmailPassword
 
 Simple trend following bot: strategy_simple_trend_follower.py
 -------------------------------------------------------------
@@ -93,19 +96,19 @@ bot sells.
 
 Market trend estimation is done by using three moving price averages.
 
-The following keys are also added:
-"S" - Sell all BTC 
-"B" - Buy BTC for all the USD you have
-"C" - Cancell all outstanding orders
-"D" - Dump bot state (for offline plotting)
+The following keys are also added:  
+"S" - Sell all BTC  
+"B" - Buy BTC for all the USD you have  
+"C" - Cancell all outstanding orders  
+"D" - Dump bot state (for offline plotting)  
 
 Volume gated trend following bot: 
 ---------------------------------
-strategy_volume_trend_follower.py
+    strategy_volume_trend_follower.py
 
 Usage:
 ------
-./goxtool.py --strategy strategy_volume_trend_follower.py
+    ./goxtool.py --strategy strategy_volume_trend_follower.py
 
 Details:
 --------
@@ -119,3 +122,4 @@ Market trend estimation is done by using three moving price averages.
 Support:
 --------
 Please consider donating to: 16csNHCBstmdcLnPg45fxF2PdKoPyPJDhX
+
