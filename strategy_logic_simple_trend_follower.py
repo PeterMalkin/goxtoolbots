@@ -5,63 +5,39 @@ import sqlite3
 import calendar
 import math
 from indicator.ma import ExponentialMovingAverage as ema
-from indicator.ma import SimpleMovingAverage as sma
-from indicator.candlestick import CandleStick
-from indicator.timesum import TimeSum
-from indicator.timeminmax import TimeMax, TimeMin
+from indicator.ma import SimpleMovingAverage as ema
 from exchange_connection import ExchangeConnection, MockExchangeConnection
 
 """
-	Volume Trend Following bot
-	Similar to moving average based trading bot.
-	The difference is that it also pays attention to volume of trades.
-	Big price moves are usually associated with big trading volumes.
-	So this bot tracks the amount of trades made, and uses it as a
-	gating signal for trend following trades.
+	Simple trend following bot. It relies on three moving averages.
+	It buys when the market is trending up, sells when the market trends down.
+	The market is believed to be bullish when the fastest moving average
+	is above the medium moving average, and the medium moving average is above
+	the slow moving average. Same true in reverse for bullish market.
 """
 
-class VolumeTrendFollowerStrategyCore:
-	def __init__(self, xcon, filename = "strategy_core_volume_trend_follower.pickle", debug = False):
+class StrategyLogicSimpleTrendFollower:
+	def __init__(self, xcon, filename = "strategy_logic_simple_trend_follower.pickle", debug = False):
 
 		self.filename = filename
 		self.xcon = xcon
 
 		# Constants
-		self.Price_Fast_EMA_Time		= 0.5	# 5 minutes
-		self.Price_Slow_SMA_Time		= 14	# 30 minutes
-		self.Price_LongTerm_EMA_Time	= 60*4	# 4 hours
-
-		self.Volume_TimeSum_Time		= 1		# minutes
-		self.Volume_Fast_EMA_Time		= 3		# minutes
-		self.Volume_Slow_SMA_Time		= 20	# minutes
-
-		self.Volume_MA_Spike_Diff_Coef	= 3.5	# ema/sma
-		self.Volume_MA_Spike_Diff_Value	= 570	# ema - sma
+		self.Price_Fast_EMA_Time		= 7  * 60 	# minutes
+		self.Price_Slow_EMA_Time		= 14 * 60	# minutes
+		self.Price_LongTerm_EMA_Time	= 21 * 60	# minutes
 
 		self.Last_Buy_Price  = 0.0
 		self.Last_Sell_Price = 0.0
 		self.Current_Price = 0.0
 
-		# Volume indicators
-
-		# Volume TimeSum - a sum of all trades per timeframe
-		self.current_volume_timesum = None
-
-		# Volume slow moving average
-		timedelta = datetime.timedelta(minutes = self.Volume_Slow_SMA_Time)
-		self.volume_sma_slow = sma(timedelta)
-
-		# Volume fast moving average
-		timedelta = datetime.timedelta(minutes = self.Volume_Fast_EMA_Time)
-		self.volume_ema_fast = ema(timedelta)
-
-		self.volume_spike = False
+		self.MinimumSpread = 0.0012
 
 		# Price indicators
 
 		# Slow moving price average
-		timedelta = datetime.timedelta(minutes = self.Price_Slow_SMA_Time)
-		self.price_sma_slow = sma(timedelta)
+		timedelta = datetime.timedelta(minutes = self.Price_Slow_EMA_Time)
+		self.price_ema_slow = ema(timedelta)
 
 		# Fast five minutes moving averages
 		timedelta = datetime.timedelta(minutes = self.Price_Fast_EMA_Time)
@@ -81,70 +57,40 @@ class VolumeTrendFollowerStrategyCore:
 		self.xcon = xcon
 		self.debug = debug
 
-	def UpdateVolume(self, data):
-
-		if (self.current_volume_timesum == None):
-			timesum_time_from = datetime.datetime.fromtimestamp(int(data["now"]))
-			timesum_time_to = timesum_time_from + datetime.timedelta(minutes = self.Volume_TimeSum_Time)
-			self.current_volume_timesum = TimeSum(timesum_time_from, timesum_time_to)
-
-		self.current_volume_timesum.Update(data)
-
-		self._volumeUpdateDebugHook(data)
-
-		if ( not self.current_volume_timesum.IsAccurate() ):
-			return
-
-		data["value"] = self.current_volume_timesum.Value
-		self.volume_sma_slow.Update(data)
-		self.volume_ema_fast.Update(data)
-
-		if (self.volume_ema_fast.Value / self.volume_sma_slow.Value > self.Volume_MA_Spike_Diff_Coef):
-			if (self.volume_ema_fast.Value - self.volume_sma_slow.Value > self.Volume_MA_Spike_Diff_Value):
-				self.volume_spike = True
-
-		if (self.volume_ema_fast.Value < self.volume_sma_slow.Value ):
-			self.volume_spike = False
-
-		self.current_volume_timesum = None
-
 	def UpdatePrice(self, data):
 
-		self.price_sma_slow.Update(data)
+		self.price_ema_slow.Update(data)
 		self.price_ema_fast.Update(data)
 		self.price_ema_longterm.Update(data)
 		self.Current_Price = data["value"]
-
 		self._updatePriceDebugHook(data)
 
 	def IsDownTrend(self):
 
-		if ( self.price_ema_fast.Value > self.price_sma_slow.Value ):
+		if ( self.price_ema_fast.Value > self.price_ema_slow.Value ):
 			return False
 
 		if ( self.price_ema_fast.Value > self.price_ema_longterm.Value):
 			return False
 
-		if (self.price_sma_slow.Value > self.price_ema_longterm.Value):
+		if (self.price_ema_slow.Value > self.price_ema_longterm.Value):
 			return False
 
 		return True
 
 	def IsUpTrend(self):
-		ma_diff = self.price_ema_fast.Value - self.price_sma_slow.Value
-		ma_diff_min = self.price_ema_fast.Value * 0.0012
-		# ma_diff_min = 0
 
+		ma_diff_min = self.price_ema_fast.Value * self.MinimumSpread
+
+		ma_diff = self.price_ema_fast.Value - self.price_ema_slow.Value
  		if ( ma_diff < ma_diff_min ):
  			return False
 
 		ma_diff = self.price_ema_fast.Value - self.price_ema_longterm.Value
-		ma_diff_min = self.price_ema_fast.Value * 0.0012
  		if ( ma_diff < ma_diff_min ):
  			return False
 
-		ma_diff = self.price_sma_slow.Value - self.price_ema_longterm.Value
-		ma_diff_min = self.price_ema_fast.Value * 0.0012
+		ma_diff = self.price_ema_slow.Value - self.price_ema_longterm.Value
  		if ( ma_diff < ma_diff_min ):
  			return False
 
@@ -153,20 +99,18 @@ class VolumeTrendFollowerStrategyCore:
 	def Act(self):
 
 		# If we do not have enough data, and are just starting, take no action
-		if (not self.price_sma_slow.IsAccurate()):
+		if (not self.price_ema_slow.IsAccurate()):
 			return
 
 		if (not self.price_ema_longterm.IsAccurate()):
 			return
 
-		if (not self.volume_sma_slow.IsAccurate()):
-			return
+		# Debug breakpoint for particular datapoints in time
+		if (self._debugIsNowPassedTimeStamp("2013 Oct 2 02:00", "%Y %b %d %H:%M")):
+			set_breakpoint_here = True
 
 		# Currently invested in BTC
 		if (self.xcon.AvailableBTC() * self.Current_Price > self.xcon.AvailableUSD()):
-
-			if (self.volume_spike == False):
-				return
 
 			if (not self.IsDownTrend()):
 				return
@@ -176,9 +120,6 @@ class VolumeTrendFollowerStrategyCore:
 
 		# Currently invested in USD
 		if (self.xcon.AvailableBTC() * self.Current_Price < self.xcon.AvailableUSD()):
-
-			if (self.volume_spike == False):
-				return
 
 			if (not self.IsUpTrend()):
 				return
@@ -193,7 +134,7 @@ class VolumeTrendFollowerStrategyCore:
 			print "LoadSuccess!"
 			f.close()
 		except:
-			print "SimpleTrendFollowerStrategyCore: Failed to load previous state, starting from scratch"
+			print "StrategyLogicSimpleTrendFollower: Failed to load previous state, starting from scratch"
 
 	def Save(self):
 		try:
@@ -203,7 +144,7 @@ class VolumeTrendFollowerStrategyCore:
 			pickle.dump(odict,f,2)
 			f.close()
 		except:
-			print "SimpleTrendFollowerStrategyCore: Failed to save my state, all the data will be lost"
+			print "StrategyLogicSimpleTrendFollower: Failed to save my state, all the data will be lost"
 
 	def ConvertAllToUSD(self):
 		self._preSellBTCDebugHook()
@@ -219,6 +160,16 @@ class VolumeTrendFollowerStrategyCore:
 		self.xcon.BuyBTC(affordable_amount_of_btc)
 		self._postBuyBTCDebugHook()
 
+	def _debugIsNowPassedTimeStamp(self, timestring, timeformat):
+		if (not self.debug):
+			return False
+
+		now = datetime.datetime.fromtimestamp(self._debugData["PriceEmaFast"][-1]["now"])
+		time_of_interest = datetime.datetime.strptime(timestring,timeformat)
+		if (now > time_of_interest):
+			return True
+
+		return False
 
 	def _updatePriceDebugHook(self, data):
 		if (not self.debug):
@@ -227,8 +178,8 @@ class VolumeTrendFollowerStrategyCore:
 		if ("RawPrice" not in self._debugData):
 			self._debugData["RawPrice"] = []
 
-		if ("PriceSmaSlow" not in self._debugData):
-			self._debugData["PriceSmaSlow"] = []
+		if ("PriceEmaSlow" not in self._debugData):
+			self._debugData["PriceEmaSlow"] = []
 
 		if ("PriceEmaFast" not in self._debugData):
 			self._debugData["PriceEmaFast"] = []
@@ -243,8 +194,8 @@ class VolumeTrendFollowerStrategyCore:
 
 		tmp = {}
 		tmp["now"] = data["now"]
-		tmp["value"] = self.price_sma_slow.Value
-		self._debugData["PriceSmaSlow"].append(tmp)
+		tmp["value"] = self.price_ema_slow.Value
+		self._debugData["PriceEmaSlow"].append(tmp)
 		del tmp
 
 		tmp = {}
@@ -260,52 +211,6 @@ class VolumeTrendFollowerStrategyCore:
 		del tmp
 
 		self._debugData["LastPriceUpdateTime"] = data["now"]
-
-	def _volumeUpdateDebugHook(self, data):
-
-		if (not self.debug):
-			return
-
-		if ("RawVolume" not in self._debugData):
-			self._debugData["RawVolume"] = []
-
-		if ("VolumeTimeSums" not in self._debugData):
-			self._debugData["VolumeTimeSums"] = []
-
-		if ("VolumeSmaSlow" not in self._debugData):
-			self._debugData["VolumeSmaSlow"] = []
-
-		if ("VolumeEmaFast" not in self._debugData):
-			self._debugData["VolumeEmaFast"] = []
-
-		if ("VolumeSpike" not in self._debugData):
-			self._debugData["VolumeSpike"] = []
-
-		self._debugData["RawVolume"].append(data)
-
-		tmp = {}
-		tmp["now"] = data["now"]
-		tmp["value"] = self.volume_sma_slow.Value
-		self._debugData["VolumeSmaSlow"].append(tmp)
-		del tmp
-
-		tmp = {}
-		tmp["now"] = data["now"]
-		tmp["value"] = self.volume_ema_fast.Value
-		self._debugData["VolumeEmaFast"].append(tmp)
-
-		tmp = {}
-		tmp["now"] = data["now"]
-		tmp["value"] = self.current_volume_timesum.Value
-		if (self.current_volume_timesum.IsAccurate()):
-			self._debugData["VolumeTimeSums"].append(tmp)
-
-		tmp = {}
-		tmp["now"] = data["now"]
-		tmp["value"] = self.volume_spike
-		self._debugData["VolumeSpike"].append(tmp)
-
-		self._debugData["LastVolumeUpdateTime"] = data["now"]
 
 	def _preSellBTCDebugHook(self):
 		if (not self.debug):
@@ -402,8 +307,6 @@ def feedRecordedData(score, sqliteDataFile, date_from, date_to):
 		score.xcon.SetBTCPrice(item["price"])
 		tmp = {"now":item["now"], "value": item["price"]}
 		score.UpdatePrice(tmp)
-		tmp = {"now":item["now"], "value": item["volume"]}
-		score.UpdateVolume(tmp)
 		score.Act()
 
 	cursor.close()
@@ -418,15 +321,9 @@ def plotStrategyCorePerformance(debugData):
 	splot.Plot("RawPrice",1, "y-")
 	splot.Plot("Sell", 1, "ro")
 	splot.Plot("Buy", 1, "g^")
-#	splot.Plot("VolumeTimeSums", 3)
-	splot.Plot("PriceSmaSlow", 1, "r-")
+	splot.Plot("PriceEmaSlow", 1, "g-")
 	splot.Plot("PriceEmaFast", 1, "b-")
-	splot.Plot("PriceEmaLongTerm", 1, "g-")
-#	splot.Plot("Trades", 3, "g*")
-#	splot.Plot("VolumeSpike", 4, "y-")
-#	splot.Plot("VolumeSmaSlow", 2, "r-")
-#	splot.Plot("VolumeEmaFast", 2, "b-")
-#	splot.Plot("PriceEmaDiff", 3, "y-")
+	splot.Plot("PriceEmaLongTerm", 1, "r-")
 
 	splot.Show()
 
@@ -434,11 +331,11 @@ def main():
 	# Test this strategy core by mocking ExchangeConnection
 	# And by feeding it the prerecorded data
 	xcon = MockExchangeConnection()
-	score = VolumeTrendFollowerStrategyCore(xcon, debug = True)
+	score = StrategyLogicSimpleTrendFollower(xcon, debug = True)
 
-	tmp = datetime.datetime.strptime("2013 Sep 1 00:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2013 Nov 1 00:00", "%Y %b %d %H:%M")
 	date_from = float(calendar.timegm(tmp.utctimetuple()))
-	tmp = datetime.datetime.strptime("2013 Sep 30 00:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2013 Nov 30 00:00", "%Y %b %d %H:%M")
 	date_to = float(calendar.timegm(tmp.utctimetuple()))
 
 	(actual_date_from, actual_date_to) = feedRecordedData(score, "mtgoxdata/mtgox.sqlite3", date_from, date_to)

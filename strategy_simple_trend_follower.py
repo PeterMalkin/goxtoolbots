@@ -2,7 +2,7 @@ import sys
 import goxapi
 import time
 import datetime
-from strategy_core_simple_trend_follower import SimpleTrendFollowerStrategyCore
+from strategy_logic_simple_trend_follower import StrategyLogicSimpleTrendFollower
 from exchange_connection import ExchangeConnection
 
 class Strategy(goxapi.BaseObject):
@@ -19,8 +19,8 @@ class Strategy(goxapi.BaseObject):
             (self.__class__.__module__, self.__class__.__name__)
 
         self.exchangeConnection = ExchangeConnection(self.gox)
-        self.score = SimpleTrendFollowerStrategyCore(self.exchangeConnection)
-        self.score.Load()
+        self.strategy_logic = StrategyLogicSimpleTrendFollower(self.exchangeConnection)
+        self.strategy_logic.Load()
 
         self.debug("%s loaded" % self.name)
 
@@ -29,21 +29,21 @@ class Strategy(goxapi.BaseObject):
 
     def slot_before_unload(self, _sender, _data):
         self.debug("%s before_unload" % self.name)
-        self.score.Save()
+        self.strategy_logic.Save()
 
     def slot_keypress(self, gox, (key)):
 
         # sell all BTC as market order
         if ( key == ord('s') ):
-            self.score.ConvertAllToUSD()
+            self.strategy_logic.ConvertAllToUSD()
 
         # spend all USD to buy BTC as market order
         if ( key == ord('b') ):
-            self.score.ConvertAllToBTC()
+            self.strategy_logic.ConvertAllToBTC()
 
-        #dump the state of score
+        #dump the state of strategy_logic
         if ( key == ord('d') ):
-            self.score.Save()
+            self.strategy_logic.Save()
 
         # immediately cancel all orders
         if ( key == ord('c') ):
@@ -55,7 +55,7 @@ class Strategy(goxapi.BaseObject):
 
         # update price indicators
         data = {"now": float(time.time()), "value": gox.quote2float(price) }
-        self.score.UpdatePrice(data)
+        self.strategy_logic.UpdatePrice(data)
 
         # Trigger the trading logic
-        self.score.Act()
+        self.strategy_logic.Act()

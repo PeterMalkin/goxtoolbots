@@ -17,8 +17,8 @@ from exchange_connection import ExchangeConnection, MockExchangeConnection
 	it sells all funds and sends an email notification.
 """
 
-class StrategyCoreTrailingStoploss:
-	def __init__(self, xcon, filename = "strategy_core_trailing_stoploss.pickle", debug = False):
+class StrategyLogicTrailingStoploss:
+	def __init__(self, xcon, filename = "strategy_logic_trailing_stoploss.pickle", debug = False):
 
 		self.filename = filename
 		self.xcon = xcon
@@ -300,11 +300,11 @@ def main():
 	# Test this strategy core by mocking ExchangeConnection
 	# And by feeding it the prerecorded data
 	xcon = MockExchangeConnection()
-	score = StrategyCoreTrailingStoploss(xcon, debug = True)
+	score = StrategyLogicTrailingStoploss(xcon, debug = True)
 
-	tmp = datetime.datetime.strptime("2013 Sep 1 22:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2013 Oct 1 22:00", "%Y %b %d %H:%M")
 	date_from = float(calendar.timegm(tmp.utctimetuple()))
-	tmp = datetime.datetime.strptime("2013 Sep 30 12:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2013 Oct 3 12:00", "%Y %b %d %H:%M")
 	date_to = float(calendar.timegm(tmp.utctimetuple()))
 
 	(actual_date_from, actual_date_to) = feedRecordedData(score, "mtgoxdata/mtgox.sqlite3", date_from, date_to)

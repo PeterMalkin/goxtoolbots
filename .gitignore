@@ -37,3 +37,6 @@ nosetests.xml
 
 # Pickles
 .pickle
+
+# logs
+.log
