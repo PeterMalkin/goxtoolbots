@@ -17,7 +17,7 @@ class ExchangeConnection:
 		self.gox.buy(0, self.gox.base2int(amount))
 
 class MockExchangeConnection(ExchangeConnection):
-	def __init__(self, availableBTC = 0.05, availableUSD = 0.0, currentPrice = 200.0):
+	def __init__(self, availableBTC = 0.0, availableUSD = 10.0, currentPrice = 200.0):
 		self.availableBTC = availableBTC
 		self.availableUSD = availableUSD
 		self.currentPrice = currentPrice

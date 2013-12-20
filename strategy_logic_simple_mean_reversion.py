@@ -5,19 +5,20 @@ import sqlite3
 import calendar
 import math
 from indicator.ma import ExponentialMovingAverage as ema
-from indicator.ma import SimpleMovingAverage as ema
 from exchange_connection import ExchangeConnection, MockExchangeConnection
 
 """
-	Simple trend following bot. It relies on three moving averages.
-	It buys when the market is trending up, sells when the market trends down.
-	The market is believed to be bullish when the fastest moving average
-	is above the medium moving average, and the medium moving average is above
-	the slow moving average. Same true in reverse for bullish market.
+	Simple mean reversion bot. It relies on three moving averages.
+	It believes that if faster moving averages are significantly
+	larger slow moving ones, that there will be a reversal movement
+	in the market, and price will drop. Same for the opposite scenario.
+	If fast moving average is significantly lower the slower moving one,
+	it is treated as a signal to buy in anticipation of market mode
+	switch to bull.
 """
 
-class StrategyLogicSimpleTrendFollower:
-	def __init__(self, xcon, filename = "strategy_logic_simple_trend_follower.pickle", debug = False):
+class StrategyLogicSimpleMeanReversion:
+	def __init__(self, xcon, filename = "strategy_logic_simple_mean_reversion.pickle", debug = False):
 
 		self.filename = filename
 		self.xcon = xcon
@@ -31,7 +32,8 @@ class StrategyLogicSimpleTrendFollower:
 		self.Last_Sell_Price = 0.0
 		self.Current_Price = 0.0
 
-		self.MinimumSpread = 0.0012
+		self.MinimumSpreadBuy = 0.0024
+		self.MinimumSpreadSell = 0.0012
 
 		# Price indicators
 
@@ -65,31 +67,35 @@ class StrategyLogicSimpleTrendFollower:
 		self.Current_Price = data["value"]
 		self._updatePriceDebugHook(data)
 
-	def IsDownTrend(self):
+	def ShouldBuy(self):
+		# Returns true if faster moving averages are significantly
+		# lower slower moving ones.
+		# Treated as a signal to buy.
 
-		if ( self.price_ema_fast.Value > self.price_ema_slow.Value ):
-			return False
+#		ma_diff_min = self.price_ema_slow.Value * self.MinimumSpreadBuy
+		ma_diff_min = self.price_ema_longterm.Value * self.MinimumSpreadBuy
+		ma_diff = self.price_ema_slow.Value - self.price_ema_fast.Value
+ 		if ( ma_diff < ma_diff_min ):
+ 			return False
 
-		if ( self.price_ema_fast.Value > self.price_ema_longterm.Value):
-			return False
+#		ma_diff_min = self.price_ema_longterm.Value * self.MinimumSpreadBuy
+		ma_diff = self.price_ema_longterm.Value - self.price_ema_slow.Value
+ 		if ( ma_diff < ma_diff_min ):
+ 			return False
 
-		if (self.price_ema_slow.Value > self.price_ema_longterm.Value):
-			return False
+ 		return True
 
-		return True
+	def ShouldSell(self):
+		# Returns true if faster moving averages are significantly
+		# larger slower moving ones.
+		# Treated as a signal to sell.
 
-	def IsUpTrend(self):
-
-		ma_diff_min = self.price_ema_fast.Value * self.MinimumSpread
-
+		ma_diff_min = self.price_ema_fast.Value * self.MinimumSpreadSell
 		ma_diff = self.price_ema_fast.Value - self.price_ema_slow.Value
  		if ( ma_diff < ma_diff_min ):
  			return False
 
-		ma_diff = self.price_ema_fast.Value - self.price_ema_longterm.Value
- 		if ( ma_diff < ma_diff_min ):
- 			return False
-
+#		ma_diff_min = self.price_ema_slow.Value * self.MinimumSpreadSell
 		ma_diff = self.price_ema_slow.Value - self.price_ema_longterm.Value
  		if ( ma_diff < ma_diff_min ):
  			return False
@@ -106,13 +112,13 @@ class StrategyLogicSimpleTrendFollower:
 			return
 
 		# Debug breakpoint for particular datapoints in time
-		if (self._debugIsNowPassedTimeStamp("2013 Oct 2 02:00", "%Y %b %d %H:%M")):
+		if (self._debugIsNowPassedTimeStamp("2013 Aug 17 05:00", "%Y %b %d %H:%M")):
 			set_breakpoint_here = True
 
 		# Currently invested in BTC
 		if (self.xcon.AvailableBTC() * self.Current_Price > self.xcon.AvailableUSD()):
 
-			if (not self.IsDownTrend()):
+			if (not self.ShouldSell()):
 				return
 
 			self.ConvertAllToUSD()
@@ -121,7 +127,7 @@ class StrategyLogicSimpleTrendFollower:
 		# Currently invested in USD
 		if (self.xcon.AvailableBTC() * self.Current_Price < self.xcon.AvailableUSD()):
 
-			if (not self.IsUpTrend()):
+			if (not self.ShouldBuy()):
 				return
 
 			self.ConvertAllToBTC()
@@ -134,7 +140,7 @@ class StrategyLogicSimpleTrendFollower:
 			print "LoadSuccess!"
 			f.close()
 		except:
-			print "StrategyLogicSimpleTrendFollower: Failed to load previous state, starting from scratch"
+			print "StrategyLogicSimpleMeanReversion: Failed to load previous state, starting from scratch"
 
 	def Save(self):
 		try:
@@ -144,7 +150,7 @@ class StrategyLogicSimpleTrendFollower:
 			pickle.dump(odict,f,2)
 			f.close()
 		except:
-			print "StrategyLogicSimpleTrendFollower: Failed to save my state, all the data will be lost"
+			print "StrategyLogicSimpleMeanReversion: Failed to save my state, all the data will be lost"
 
 	def ConvertAllToUSD(self):
 		self._preSellBTCDebugHook()
@@ -328,11 +334,11 @@ def main():
 	# Test this strategy core by mocking ExchangeConnection
 	# And by feeding it the prerecorded data
 	xcon = MockExchangeConnection()
-	score = StrategyLogicSimpleTrendFollower(xcon, debug = True)
+	score = StrategyLogicSimpleMeanReversion(xcon, debug = True)
 
-	tmp = datetime.datetime.strptime("2013 Nov 1 00:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2013 Dec 1 00:00", "%Y %b %d %H:%M")
 	date_from = float(calendar.timegm(tmp.utctimetuple()))
-	tmp = datetime.datetime.strptime("2013 Nov 30 00:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2013 Dec 20 12:00", "%Y %b %d %H:%M")
 	date_to = float(calendar.timegm(tmp.utctimetuple()))
 
 	(actual_date_from, actual_date_to) = feedRecordedData(score, "mtgoxdata/mtgox.sqlite3", date_from, date_to)
