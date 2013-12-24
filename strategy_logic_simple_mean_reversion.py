@@ -330,15 +330,38 @@ def plotStrategyCorePerformance(debugData):
 
 	splot.Show()
 
+def minimizeFunction(minSpread):
+	xcon = MockExchangeConnection()
+	score = StrategyLogicSimpleMeanReversion(xcon, debug = True)
+	minSpreadBuy = minSpread[0]
+	minSpreadSell = minSpread[1]
+	score.MinimumSpreadBuy = minSpreadBuy
+	score.MinimumSpreadSell = minSpreadSell
+
+	tmp = datetime.datetime.strptime("2013 Dec 22 00:00", "%Y %b %d %H:%M")
+	date_from = float(calendar.timegm(tmp.utctimetuple()))
+	tmp = datetime.datetime.strptime("2013 Dec 23 00:00", "%Y %b %d %H:%M")
+	date_to = float(calendar.timegm(tmp.utctimetuple()))
+
+	feedRecordedData(score, "mtgoxdata/mtgox.sqlite3", date_from, date_to)
+	totalFunds = xcon.AvailableBTC() * score.Current_Price + xcon.AvailableUSD()
+	print "Total funds = " + str(totalFunds)
+	return 1/totalFunds
+
+def optimizeMagicNumbers():
+	from scipy.optimize import fmin
+	xopt = fmin(minimizeFunction, [0.0024, 0.0012])
+	print "MinimumSpreadBuy=" + str(xopt[0]) + " MinimumSpreadSell=" + str(xopt[1])
+
 def main():
 	# Test this strategy core by mocking ExchangeConnection
 	# And by feeding it the prerecorded data
 	xcon = MockExchangeConnection()
 	score = StrategyLogicSimpleMeanReversion(xcon, debug = True)
 
-	tmp = datetime.datetime.strptime("2013 Dec 1 00:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2013 Sep 19 00:00", "%Y %b %d %H:%M")
 	date_from = float(calendar.timegm(tmp.utctimetuple()))
-	tmp = datetime.datetime.strptime("2013 Dec 20 12:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2013 Dec 25 00:00", "%Y %b %d %H:%M")
 	date_to = float(calendar.timegm(tmp.utctimetuple()))
 
 	(actual_date_from, actual_date_to) = feedRecordedData(score, "mtgoxdata/mtgox.sqlite3", date_from, date_to)
@@ -347,4 +370,11 @@ def main():
 	plotStrategyCorePerformance(score._debugData)
 
 if __name__ == "__main__":
-    main()
+	import argparse
+	parser = argparse.ArgumentParser()
+	parser.add_argument('-o', '--optimize_magic_humbers', action="store_true")
+	args = parser.parse_args()
+	if (args.optimize_magic_humbers):
+		optimizeMagicNumbers()
+		exit()
+	main()
