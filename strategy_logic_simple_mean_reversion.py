@@ -32,8 +32,8 @@ class StrategyLogicSimpleMeanReversion:
 		self.Last_Sell_Price = 0.0
 		self.Current_Price = 0.0
 
-		self.MinimumSpreadBuy = 0.0024
-		self.MinimumSpreadSell = 0.0012
+		self.MinimumSpreadBuy = 0.0385
+		self.MinimumSpreadSell = 0.00832
 
 		# Price indicators
 
@@ -152,7 +152,13 @@ class StrategyLogicSimpleMeanReversion:
 		except:
 			print "StrategyLogicSimpleMeanReversion: Failed to save my state, all the data will be lost"
 
+	def CancelAllOutstandingOrders(self):
+		if (not self.debug):
+			for order in gox.orderbook.owns:
+				gox.cancel(order.oid)
+
 	def ConvertAllToUSD(self):
+		self.CancelAllOutstandingOrders()
 		self._preSellBTCDebugHook()
 		self.Last_Sell_Price = self.Current_Price
 		btc_to_sell = self.xcon.AvailableBTC()
@@ -160,6 +166,7 @@ class StrategyLogicSimpleMeanReversion:
 		self._postSellBTCDebugHook()
 
 	def ConvertAllToBTC(self):
+		self.CancelAllOutstandingOrders()
 		self._preBuyBTCDebugHook()
 		self.Last_Buy_Price = self.Current_Price
 		affordable_amount_of_btc = self.xcon.AvailableUSD() / self.Current_Price
@@ -338,19 +345,34 @@ def minimizeFunction(minSpread):
 	score.MinimumSpreadBuy = minSpreadBuy
 	score.MinimumSpreadSell = minSpreadSell
 
-	tmp = datetime.datetime.strptime("2013 Dec 22 00:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2013 Dec 1 00:00", "%Y %b %d %H:%M")
 	date_from = float(calendar.timegm(tmp.utctimetuple()))
-	tmp = datetime.datetime.strptime("2013 Dec 23 00:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2013 Dec 25 00:00", "%Y %b %d %H:%M")
 	date_to = float(calendar.timegm(tmp.utctimetuple()))
 
 	feedRecordedData(score, "mtgoxdata/mtgox.sqlite3", date_from, date_to)
 	totalFunds = xcon.AvailableBTC() * score.Current_Price + xcon.AvailableUSD()
+	print "MinimumSpreadBuy="+ str(minSpreadBuy) + " MinimumSpreadSell=" + str(minSpreadSell)
 	print "Total funds = " + str(totalFunds)
+	print "*********************************************"
 	return 1/totalFunds
 
 def optimizeMagicNumbers():
 	from scipy.optimize import fmin
-	xopt = fmin(minimizeFunction, [0.0024, 0.0012])
+	from scipy.optimize import minimize
+	from scipy.optimize import fmin_tnc
+	from scipy.optimize import anneal
+
+#	xopt = fmin(minimizeFunction, [0.0385, 0.00832], maxiter=100, maxfun=400)
+#	print "MinimumSpreadBuy=" + str(xopt[0]) + " MinimumSpreadSell=" + str(xopt[1])
+
+#	result = minimize(minimizeFunction, [0.0, 0.0], method="L-BFGS-B", bounds=[(0,0.1),(0,0.1)], options={"maxiter":4000,"disp":True} )
+#	print "MinimumSpreadBuy=" + str(result.x[0]) + " MinimumSpreadSell=" + str(result.x[1])
+
+#	xopt = fmin_tnc(minimizeFunction, [0.0, 0.0], bounds=[(0.0,0.1),(0.0,0.1)], maxfun=4000, xtol=0.0001, ftol=0.01, disp=True, approx_grad=True )
+#	print "MinimumSpreadBuy=" + str(xopt[0]) + " MinimumSpreadSell=" + str(xopt[1])
+
+	xopt = anneal(minimizeFunction, [0.0385, 0.00832], maxiter=40, disp=True, lower=0.0, upper=0.1 )
 	print "MinimumSpreadBuy=" + str(xopt[0]) + " MinimumSpreadSell=" + str(xopt[1])
 
 def main():
@@ -359,9 +381,9 @@ def main():
 	xcon = MockExchangeConnection()
 	score = StrategyLogicSimpleMeanReversion(xcon, debug = True)
 
-	tmp = datetime.datetime.strptime("2013 Sep 19 00:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2013 Dec 1 00:00", "%Y %b %d %H:%M")
 	date_from = float(calendar.timegm(tmp.utctimetuple()))
-	tmp = datetime.datetime.strptime("2013 Dec 25 00:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2014 Jan 1 00:00", "%Y %b %d %H:%M")
 	date_to = float(calendar.timegm(tmp.utctimetuple()))
 
 	(actual_date_from, actual_date_to) = feedRecordedData(score, "mtgoxdata/mtgox.sqlite3", date_from, date_to)
