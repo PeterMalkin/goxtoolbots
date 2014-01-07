@@ -347,7 +347,7 @@ def minimizeFunction(minSpread):
 
 	tmp = datetime.datetime.strptime("2013 Dec 1 00:00", "%Y %b %d %H:%M")
 	date_from = float(calendar.timegm(tmp.utctimetuple()))
-	tmp = datetime.datetime.strptime("2013 Dec 25 00:00", "%Y %b %d %H:%M")
+	tmp = datetime.datetime.strptime("2014 Jan 1 00:00", "%Y %b %d %H:%M")
 	date_to = float(calendar.timegm(tmp.utctimetuple()))
 
 	feedRecordedData(score, "mtgoxdata/mtgox.sqlite3", date_from, date_to)
@@ -363,17 +363,12 @@ def optimizeMagicNumbers():
 	from scipy.optimize import fmin_tnc
 	from scipy.optimize import anneal
 
-#	xopt = fmin(minimizeFunction, [0.0385, 0.00832], maxiter=100, maxfun=400)
-#	print "MinimumSpreadBuy=" + str(xopt[0]) + " MinimumSpreadSell=" + str(xopt[1])
-
-#	result = minimize(minimizeFunction, [0.0, 0.0], method="L-BFGS-B", bounds=[(0,0.1),(0,0.1)], options={"maxiter":4000,"disp":True} )
-#	print "MinimumSpreadBuy=" + str(result.x[0]) + " MinimumSpreadSell=" + str(result.x[1])
-
-#	xopt = fmin_tnc(minimizeFunction, [0.0, 0.0], bounds=[(0.0,0.1),(0.0,0.1)], maxfun=4000, xtol=0.0001, ftol=0.01, disp=True, approx_grad=True )
-#	print "MinimumSpreadBuy=" + str(xopt[0]) + " MinimumSpreadSell=" + str(xopt[1])
-
-	xopt = anneal(minimizeFunction, [0.0385, 0.00832], maxiter=40, disp=True, lower=0.0, upper=0.1 )
-	print "MinimumSpreadBuy=" + str(xopt[0]) + " MinimumSpreadSell=" + str(xopt[1])
+	xopt = anneal(minimizeFunction, [0.0385, 0.00832], maxeval=50, disp=True, lower=[0.0, 0.0], upper=[0.1, 0.1] )
+	print "MonteCarlo optimzation results: " + str(xopt)
+	print "Starting gradient descent with the following starting point: MinimumSpreadBuy=" + str(xopt[0][0]) + "MinimumSpreadSell=" +str(xopt[0][1])
+	xopt = fmin(minimizeFunction, [xopt[0][0], xopt[0][1]], maxiter=100, maxfun=4000)
+	print "Gradient descent optimization results: " + str(xopt)
+	print "Result: MinimumSpreadBuy=" + str(xopt[0]) + " MinimumSpreadSell=" + str(xopt[1])
 
 def main():
 	# Test this strategy core by mocking ExchangeConnection
