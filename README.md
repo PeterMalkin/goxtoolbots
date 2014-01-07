@@ -117,6 +117,39 @@ You will need the following:
     email_server_port = 25  
     email_server_password = TradingBotEmailPassword  
 
+TA-Lib:
+-------
+Here's how you can plug in TA-Lib if you want more technical analisys indicators
+
+	1.1 Get build essentials
+	sudo apt-get install build-essential
+	sudo apt-get install python2.7-dev
+	sudo apt-get install python-pip
+
+	1.2 Install TA-Lib
+	http://www.zwets.com/ta-lib/
+	sudo gedit /etc/apt/sources.list
+	add:
+	deb     http://www.zwets.com/debs    unstable/
+	deb-src http://www.zwets.com/debs    unstable/
+	sudo apt-get update
+	sudo apt-get install ta-lib-dev
+
+	1.2.1 If the above does not work (Goobuntu prohibits 3rd party packages)
+	Download http://sourceforge.net/projects/ta-lib/files/ta-lib/0.4.0/ta-lib-0.4.0-src.tar.gz/download?use_mirror=iweb
+	cd ~/Downloads
+	tar zxfv ta-lib-0.4.0-src.tar.gz
+	cd ta-lib
+	./configure --prefix=/usr
+	make
+	sudo make install
+
+	1.3 Install python wrapper
+	sudo pip install Cython
+	sudo pip install numpy
+	sudo pip install TA-Lib
+
+
 Support:
 --------
 Please consider donating to: 16csNHCBstmdcLnPg45fxF2PdKoPyPJDhX
